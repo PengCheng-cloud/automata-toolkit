@@ -1,0 +1,11 @@
+# Opacity example. The system secretly chooses state 1 (secret) or 2 with the
+# unobservable event 'u'. Only 'a' and 'b' are observable.
+# Only the secret state can produce 'b', so observing 'b' reveals the secret.
+#   ./build/automata opacity examples/leaky_system.nfa 1 ab
+states 4
+initial 0
+0 u 1
+0 u 2
+1 a 3
+2 a 3
+1 b 1

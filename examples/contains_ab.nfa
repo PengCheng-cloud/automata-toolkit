@@ -1,0 +1,12 @@
+# NFA over {a, b} that accepts all words containing "ab".
+# It guesses where "ab" starts; the epsilon edge shows epsilon support.
+states 4
+initial 0
+accept 3
+0 a 0
+0 b 0
+0 eps 1
+1 a 2
+2 b 3
+3 a 3
+3 b 3

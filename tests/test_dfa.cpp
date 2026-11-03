@@ -1,12 +1,12 @@
-#include <cassert>
-#include <iostream>
-
 #include "automata/dfa.hpp"
+#include "check.hpp"
 
 using automata::DFA;
 
+namespace {
+
 // DFA over {a, b} that accepts words ending with "ab".
-static DFA ends_with_ab() {
+DFA ends_with_ab() {
     DFA d(3);
     d.set_start(0);
     d.add_accepting(2);
@@ -19,40 +19,25 @@ static DFA ends_with_ab() {
     return d;
 }
 
-static void test_ends_with_ab() {
+}  // namespace
+
+void test_dfa() {
     DFA d = ends_with_ab();
-    assert(d.accepts("ab"));
-    assert(d.accepts("aab"));
-    assert(d.accepts("babab"));
-    assert(!d.accepts(""));
-    assert(!d.accepts("a"));
-    assert(!d.accepts("aba"));
-    assert(!d.accepts("abc"));  // 'c' has no transition
-}
+    CHECK(d.accepts("ab"));
+    CHECK(d.accepts("aab"));
+    CHECK(d.accepts("babab"));
+    CHECK(!d.accepts(""));
+    CHECK(!d.accepts("a"));
+    CHECK(!d.accepts("aba"));
+    CHECK(!d.accepts("abc"));  // 'c' has no transition
 
-static void test_determinism_is_enforced() {
-    DFA d(2);
-    d.add_transition(0, 'a', 1);
-    bool thrown = false;
-    try {
-        d.add_transition(0, 'a', 0);
-    } catch (const std::invalid_argument&) {
-        thrown = true;
-    }
-    assert(thrown);
-}
+    DFA nd(2);
+    nd.add_transition(0, 'a', 1);
+    CHECK_THROWS(nd.add_transition(0, 'a', 0));  // would make it nondeterministic
+    CHECK_THROWS(nd.add_transition(0, 'b', 5));  // invalid state
 
-static void test_read_from_file() {
-    DFA d = automata::read_dfa("examples/ends_with_ab.dfa");
-    assert(d.num_states() == 3);
-    assert(d.accepts("abab"));
-    assert(!d.accepts("abba"));
-}
-
-int main() {
-    test_ends_with_ab();
-    test_determinism_is_enforced();
-    test_read_from_file();
-    std::cout << "All DFA tests passed.\n";
-    return 0;
+    DFA f = automata::read_dfa("examples/ends_with_ab.dfa");
+    CHECK(f.num_states() == 3);
+    CHECK(f.accepts("abab"));
+    CHECK(!f.accepts("abba"));
 }

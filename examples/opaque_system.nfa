@@ -1,0 +1,11 @@
+# Same as leaky_system.nfa, but state 2 can also produce 'b'.
+# Now every observation is also possible without the secret: current-state opaque.
+#   ./build/automata opacity examples/opaque_system.nfa 1 ab
+states 4
+initial 0
+0 u 1
+0 u 2
+1 a 3
+2 a 3
+1 b 1
+2 b 2

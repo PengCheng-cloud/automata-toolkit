@@ -1,0 +1,13 @@
+# Timing attack case study: a password check that compares byte by byte
+# and returns as soon as a byte is wrong.
+# The secret is whether the first byte of the guess was correct
+# (location first_ok). The attacker only measures the response time.
+#   ./build/automata et-opacity examples/timing_leak.ta first_ok done 10
+clocks x
+locations start first_ok done
+initial start
+invariant start x<=1
+invariant first_ok x<=3
+edge start done first_byte_wrong guard=x==1          # answers after 1 time unit
+edge start first_ok first_byte_correct guard=x==1
+edge first_ok done answer guard=x==3                 # answers after 3 time units

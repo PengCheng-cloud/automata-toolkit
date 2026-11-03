@@ -37,6 +37,11 @@ void DFA::add_transition(int from, char symbol, int to) {
 
 bool DFA::is_accepting(int state) const { return accepting_.count(state) > 0; }
 
+const std::map<char, int>& DFA::transitions(int state) const {
+    check_state(state);
+    return delta_[state];
+}
+
 int DFA::next(int state, char symbol) const {
     check_state(state);
     auto it = delta_[state].find(symbol);
@@ -100,6 +105,33 @@ DFA read_dfa(const std::string& path) {
         }
     }
     return dfa;
+}
+
+std::string to_text(const DFA& dfa) {
+    std::ostringstream out;
+    out << "states " << dfa.num_states() << "\n";
+    out << "start " << dfa.start() << "\n";
+    out << "accept";
+    for (int s : dfa.accepting()) out << " " << s;
+    out << "\n";
+    for (int s = 0; s < dfa.num_states(); ++s)
+        for (const auto& [symbol, to] : dfa.transitions(s))
+            out << s << " " << symbol << " " << to << "\n";
+    return out.str();
+}
+
+std::string to_dot(const DFA& dfa) {
+    std::ostringstream out;
+    out << "digraph DFA {\n  rankdir=LR;\n  __start [shape=point];\n";
+    for (int s = 0; s < dfa.num_states(); ++s)
+        out << "  " << s << " [shape=" << (dfa.is_accepting(s) ? "doublecircle" : "circle")
+            << "];\n";
+    if (dfa.num_states() > 0) out << "  __start -> " << dfa.start() << ";\n";
+    for (int s = 0; s < dfa.num_states(); ++s)
+        for (const auto& [symbol, to] : dfa.transitions(s))
+            out << "  " << s << " -> " << to << " [label=\"" << symbol << "\"];\n";
+    out << "}\n";
+    return out.str();
 }
 
 }  // namespace automata

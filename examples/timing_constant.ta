@@ -1,0 +1,13 @@
+# Fixed version of timing_leak.ta: a wrong first byte is still answered
+# only after 3 time units (constant-time comparison).
+#   ./build/automata et-opacity examples/timing_constant.ta first_ok done 10
+clocks x
+locations start first_ok wait done
+initial start
+invariant start x<=1
+invariant first_ok x<=3
+invariant wait x<=3
+edge start wait first_byte_wrong guard=x==1
+edge start first_ok first_byte_correct guard=x==1
+edge wait done answer guard=x==3
+edge first_ok done answer guard=x==3

@@ -22,6 +22,10 @@ public:
     void add_transition(int from, char symbol, int to);
 
     bool is_accepting(int state) const;
+    const std::set<int>& accepting() const { return accepting_; }
+
+    // Outgoing transitions of a state: symbol -> target state.
+    const std::map<char, int>& transitions(int state) const;
 
     // Returns the next state, or -1 if there is no transition (dead state).
     int next(int state, char symbol) const;
@@ -41,5 +45,11 @@ private:
 
 // Reads a DFA from a simple text format (see examples/*.dfa).
 DFA read_dfa(const std::string& path);
+
+// Writes a DFA in the same text format.
+std::string to_text(const DFA& dfa);
+
+// Writes a DFA in Graphviz DOT format (render with: dot -Tpng file.dot -o file.png).
+std::string to_dot(const DFA& dfa);
 
 }  // namespace automata
