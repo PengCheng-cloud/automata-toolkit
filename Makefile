@@ -6,7 +6,7 @@ LIB_SRC  := src/dfa.cpp src/nfa.cpp src/algorithms.cpp src/opacity.cpp src/timed
 TEST_SRC := $(wildcard tests/*.cpp)
 HEADERS  := $(wildcard include/automata/*.hpp) tests/check.hpp
 
-.PHONY: all test clean
+.PHONY: all test bench clean
 
 all: build/automata
 
@@ -21,6 +21,12 @@ build/tests: $(TEST_SRC) $(LIB_SRC) $(HEADERS) | build
 
 test: build/tests
 	./build/tests
+
+build/bench: bench/bench_clock_bounds.cpp $(LIB_SRC) $(HEADERS) | build
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) bench/bench_clock_bounds.cpp $(LIB_SRC) -o $@
+
+bench: build/bench
+	./build/bench
 
 clean:
 	rm -rf build

@@ -7,6 +7,7 @@ void test_nfa();
 void test_algorithms();
 void test_opacity();
 void test_timed();
+void test_clock_bounds();
 void test_random();
 
 int main() {
@@ -15,6 +16,7 @@ int main() {
     test_algorithms();
     test_opacity();
     test_timed();
+    test_clock_bounds();
     test_random();
     if (failures() == 0) {
         std::cout << "All tests passed.\n";

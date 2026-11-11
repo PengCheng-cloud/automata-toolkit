@@ -30,6 +30,8 @@ Timed automata (integer-time semantics)
   reach <file.ta> <location>              shortest run reaching a location
   et-opacity <file.ta> <secret> <final> <horizon>
                                           execution-time opacity
+  states <file.ta>                        size of the reachable state space with the
+                                          global clock bound and with per-location bounds
 )";
 
 bool ends_with(const std::string& s, const std::string& suffix) {
@@ -155,6 +157,31 @@ int cmd_et_opacity(const std::vector<std::string>& args) {
     return 0;
 }
 
+int cmd_states(const std::vector<std::string>& args) {
+    if (args.size() != 1) throw std::invalid_argument("states needs a file");
+    TimedAutomaton ta = read_timed_automaton(args[0]);
+
+    std::cout << "relevant clock bounds per location (- means the clock is dead there):\n";
+    auto bounds = ta.relevant_bounds();
+    for (int l = 0; l < ta.num_locations(); ++l) {
+        std::cout << "  " << ta.location_name(l) << ":";
+        for (int c = 0; c < ta.num_clocks(); ++c) {
+            std::cout << " " << ta.clock_name(c) << ":";
+            if (bounds[l][c] < 0) std::cout << "-";
+            else std::cout << bounds[l][c];
+        }
+        std::cout << "\n";
+    }
+
+    StateSpaceSize global = explore(ta, ClockAbstraction::Global);
+    StateSpaceSize local = explore(ta, ClockAbstraction::PerLocation);
+    std::cout << "global bound (" << ta.max_constant() << "): " << global.states << " states, "
+              << global.transitions << " transitions\n"
+              << "per-location bounds: " << local.states << " states, " << local.transitions
+              << " transitions\n";
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -173,6 +200,7 @@ int main(int argc, char* argv[]) {
         if (cmd == "opacity") return cmd_opacity(args);
         if (cmd == "reach") return cmd_reach(args);
         if (cmd == "et-opacity") return cmd_et_opacity(args);
+        if (cmd == "states") return cmd_states(args);
         std::cerr << "unknown command: " << cmd << "\n\n" << kUsage;
         return 1;
     } catch (const std::exception& e) {

@@ -73,41 +73,114 @@ int TimedAutomaton::max_constant() const {
     return m;
 }
 
+std::vector<std::vector<int>> TimedAutomaton::relevant_bounds() const {
+    std::vector<std::vector<int>> bound(num_locations(), std::vector<int>(num_clocks(), -1));
+    for (int l = 0; l < num_locations(); ++l)
+        for (const auto& c : invariants_[l]) bound[l][c.clock] = std::max(bound[l][c.clock], c.value);
+    for (const auto& e : edges_)
+        for (const auto& c : e.guard) bound[e.from][c.clock] = std::max(bound[e.from][c.clock], c.value);
+
+    // Propagate backwards along edges that keep the clock, until nothing changes.
+    // Bounds only grow and are limited by max_constant(), so this terminates.
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const auto& e : edges_) {
+            for (int x = 0; x < num_clocks(); ++x) {
+                if (std::find(e.resets.begin(), e.resets.end(), x) != e.resets.end()) continue;
+                if (bound[e.to][x] > bound[e.from][x]) {
+                    bound[e.from][x] = bound[e.to][x];
+                    changed = true;
+                }
+            }
+        }
+    }
+    return bound;
+}
+
 namespace {
+
+// caps[l][x]: clock x is stored as min(value, caps[l][x]) while in location l.
+using Caps = std::vector<std::vector<int>>;
+
+Caps make_caps(const TimedAutomaton& ta, ClockAbstraction abstraction) {
+    if (abstraction == ClockAbstraction::Global)
+        return Caps(ta.num_locations(), std::vector<int>(ta.num_clocks(), ta.max_constant() + 1));
+    Caps caps = ta.relevant_bounds();
+    for (auto& row : caps)
+        for (int& v : row) v += 1;  // dead clock: bound -1, cap 0
+    return caps;
+}
+
+void apply_caps(TAState& s, const Caps& caps) {
+    const std::vector<int>& row = caps[s.location];
+    for (std::size_t x = 0; x < s.clocks.size(); ++x) s.clocks[x] = std::min(s.clocks[x], row[x]);
+}
 
 bool all_hold(const std::vector<ClockConstraint>& cs, const std::vector<int>& clocks) {
     return std::all_of(cs.begin(), cs.end(), [&](const ClockConstraint& c) { return c.holds(clocks); });
 }
 
 // All successors of a state: one delay step and every enabled edge.
-std::vector<TraceStep> successors(const TimedAutomaton& ta, const TAState& s, int cap) {
+//
+// Guards and invariants are checked on the stored (capped) values. This is sound
+// because a capped value lies above every constant it can still be compared with.
+// A dead clock is stored as 0 and is by definition not compared with anything.
+std::vector<TraceStep> successors(const TimedAutomaton& ta, const TAState& s, const Caps& caps) {
     std::vector<TraceStep> result;
 
     TAState delayed = s;
-    for (int& v : delayed.clocks) v = std::min(v + 1, cap);
+    for (int& v : delayed.clocks) v += 1;
+    apply_caps(delayed, caps);
     if (all_hold(ta.invariant(s.location), delayed.clocks)) result.push_back({true, "", delayed});
 
     for (const TAEdge& e : ta.edges()) {
         if (e.from != s.location || !all_hold(e.guard, s.clocks)) continue;
         TAState next{e.to, s.clocks};
         for (int c : e.resets) next.clocks.at(c) = 0;
-        if (all_hold(ta.invariant(e.to), next.clocks)) result.push_back({false, e.label, next});
+        // The invariant of the target is checked before capping to the target's bounds:
+        // the value still carries the precision of the source location, which is at least
+        // as fine for every clock that the edge does not reset.
+        if (!all_hold(ta.invariant(e.to), next.clocks)) continue;
+        apply_caps(next, caps);
+        result.push_back({false, e.label, next});
     }
     return result;
 }
 
-TAState initial_state(const TimedAutomaton& ta) {
+TAState initial_state(const TimedAutomaton& ta, const Caps& caps) {
     TAState init{ta.initial(), std::vector<int>(ta.num_clocks(), 0)};
     if (!all_hold(ta.invariant(init.location), init.clocks))
         throw std::runtime_error("initial state violates the invariant");
+    apply_caps(init, caps);
     return init;
 }
 
 }  // namespace
 
-std::optional<std::vector<TraceStep>> reachability_witness(const TimedAutomaton& ta, int target) {
-    const int cap = ta.max_constant() + 1;
-    TAState init = initial_state(ta);
+StateSpaceSize explore(const TimedAutomaton& ta, ClockAbstraction abstraction) {
+    const Caps caps = make_caps(ta, abstraction);
+    StateSpaceSize size;
+    TAState init = initial_state(ta, caps);
+    std::set<TAState> seen{init};
+    std::queue<TAState> q;
+    q.push(init);
+    while (!q.empty()) {
+        TAState s = q.front();
+        q.pop();
+        size.locations.insert(s.location);
+        for (const TraceStep& step : successors(ta, s, caps)) {
+            ++size.transitions;
+            if (seen.insert(step.state).second) q.push(step.state);
+        }
+    }
+    size.states = seen.size();
+    return size;
+}
+
+std::optional<std::vector<TraceStep>> reachability_witness(const TimedAutomaton& ta, int target,
+                                                           ClockAbstraction abstraction) {
+    const Caps caps = make_caps(ta, abstraction);
+    TAState init = initial_state(ta, caps);
 
     std::map<TAState, std::pair<TAState, TraceStep>> parent;  // state -> (previous, step)
     std::set<TAState> seen{init};
@@ -126,7 +199,7 @@ std::optional<std::vector<TraceStep>> reachability_witness(const TimedAutomaton&
             std::reverse(trace.begin(), trace.end());
             return trace;
         }
-        for (const TraceStep& step : successors(ta, s, cap)) {
+        for (const TraceStep& step : successors(ta, s, caps)) {
             if (seen.insert(step.state).second) {
                 parent.emplace(step.state, std::make_pair(s, step));
                 q.push(step.state);
@@ -137,13 +210,13 @@ std::optional<std::vector<TraceStep>> reachability_witness(const TimedAutomaton&
 }
 
 ExecutionTimes execution_times(const TimedAutomaton& ta, int secret_location,
-                               int final_location, int horizon) {
-    const int cap = ta.max_constant() + 1;
+                               int final_location, int horizon, ClockAbstraction abstraction) {
+    const Caps caps = make_caps(ta, abstraction);
     // Extended state: (TA state, visited secret?, elapsed time).
     using Ext = std::tuple<TAState, bool, int>;
     ExecutionTimes result;
 
-    TAState init = initial_state(ta);
+    TAState init = initial_state(ta, caps);
     std::set<Ext> seen;
     std::queue<Ext> q;
     Ext start{init, init.location == secret_location, 0};
@@ -156,7 +229,7 @@ ExecutionTimes execution_times(const TimedAutomaton& ta, int secret_location,
             (secret ? result.secret_runs : result.public_runs).insert(time);
             continue;  // the run ends when the final location is reached
         }
-        for (const TraceStep& step : successors(ta, s, cap)) {
+        for (const TraceStep& step : successors(ta, s, caps)) {
             int t = time + (step.is_delay ? 1 : 0);
             if (t > horizon) continue;
             bool sec = secret || step.state.location == secret_location;

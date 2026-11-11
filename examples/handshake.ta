@@ -1,0 +1,17 @@
+# A handshake in three phases. Every phase has its own clock and a deadline:
+#   hello      must be answered within 4 time units   (clock a)
+#   key        takes between 2 and 6 time units       (clock b)
+#   confirm    must arrive within 3 time units        (clock c)
+# Each clock only matters in its own phase. With one global bound (6) all three
+# clocks are tracked up to 7 everywhere; with per-location bounds a clock is
+# dropped as soon as nothing depends on it any more.
+#   ./build/automata states examples/handshake.ta
+clocks a b c
+locations hello key confirm established
+initial hello
+invariant hello a<=4
+invariant key b<=6
+invariant confirm c<=3
+edge hello key server_hello guard=a>=1 reset=b
+edge key confirm key_exchange guard=b>=2 reset=c
+edge confirm established finished guard=c>=1
